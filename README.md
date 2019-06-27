@@ -1,4 +1,5 @@
 # ts-contract
+Create strongly typed invokes for your ride contracts
 
 ## Installation
 ```
