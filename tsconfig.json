@@ -5,6 +5,9 @@
     "lib": [
       "esnext",
     ],
+    "sourceMap": true,
+    "declaration": true,
+    "resolveJsonModule": true,
     "baseUrl": "./src",
     "outDir": "dist",
     "strict": false,
