@@ -1,0 +1,146 @@
+{-# STDLIB_VERSION 3 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+let waves = 100000000
+let empty = base58''
+let hashSize = 32
+let keySize = 32
+let longSize = 8
+let fightTimeout = 100
+let movesCount = 3
+
+let rock = base58'1'
+let paper = base58'2'
+let scissors = base58'3'
+
+func get(bytes: ByteVector, index: Int) = {
+    bytes.drop(index).take(1)
+}
+
+func getBinaryOr(key: String, default: ByteVector) = if isDefined(getBinary(this, key)) then getBinaryValue(this, key) else default
+
+func isValidMove(move: ByteVector) = {
+    move == rock || move == paper || move == scissors
+}
+
+func isValidMoves(moves: ByteVector) = {
+    moves.size() >= movesCount &&
+    moves.get(0).isValidMove() &&
+    moves.get(1).isValidMove() &&
+    moves.get(2).isValidMove()
+}
+
+func round(p1Moves: ByteVector, p2Moves: ByteVector, round: Int) = {
+    let m1 = p1Moves.get(round)
+    let m2 = p2Moves.get(round)
+
+    if m1 == m2 then 0 else
+    if (m1 == scissors && m2 == paper) ||
+    (m1 == rock && m2 == scissors) ||
+    (m1 == paper && m2 == rock) then -1 else 1
+}
+
+func fight(p1Moves: ByteVector, p2Moves: ByteVector) = {
+    round(p1Moves, p2Moves, 0) + 
+    round(p1Moves, p2Moves, 1) + 
+    round(p1Moves, p2Moves, 2) 
+}
+
+## Fight data: [p1 movesHash][p2 join height][p2 public key][p2 moves][p1 move | p2 public key (timeout case)]
+##                32 bytes        8 bytes        32 bytes     3 bytes       32 bytes
+func store(fightId: String, data: ByteVector) = {
+    DataEntry(fightId, fightId.getBinaryOr(empty) + data)
+}
+
+@Callable(i)
+func create(movesHash: ByteVector) = {
+
+    let p = i.payment.extract()
+
+    if p.assetId.isDefined() then throw("Payment should be in WAVES.") else
+    if p.amount != 1 * waves then throw("Amount should be 1 WAVE.") else
+    if movesHash.size() != hashSize then throw("Invalid moves.") else
+
+	WriteSet([
+        store(i.callerPublicKey.toBase58String() + "_" + i.transactionId.toBase58String(), movesHash)  
+	])
+}
+
+@Callable(i)
+func join(fightId: String, moves: ByteVector) = {
+
+    let p = i.payment.extract()
+
+    if p.assetId.isDefined() then throw("Payment should be in WAVES.") else
+    if p.amount != 1 * waves then throw("Amount should be 1 WAVE.") else
+    if !this.getBinary(fightId).isDefined() then throw("Fight is not found.") else
+    if this.getBinaryValue(fightId).size() != hashSize then throw("Fight is already started.") else
+    if !isValidMoves(moves) then throw("Invalid moves.") else
+    
+    WriteSet([
+        store(fightId, height.toBytes() + i.callerPublicKey + moves)
+	])
+}
+
+@Callable(i)
+func complete(fightId: String, moves: ByteVector) = {
+
+    if !this.getBinary(fightId).isDefined() then throw("Fight is not found.") else
+
+    let fightData = this.getBinaryValue(fightId)
+
+    if fightData.size() == hashSize then throw("Fight is not started.") else
+    if fightData.size() > hashSize + longSize + keySize + movesCount then throw("Fight is already finished.") else
+
+    let hashedMoves = this.getBinaryValue(fightId).take(hashSize)
+
+    if hashedMoves != blake2b256(moves) || !isValidMoves(moves) then throw("Invalid moves.") else
+
+    let p2PublicKey = fightData.dropRight(movesCount).takeRight(keySize)
+    let r = fight(moves.take(movesCount), fightData.takeRight(movesCount))
+
+	ScriptResult(
+		WriteSet([
+			store(fightId, moves)
+		]), 
+        TransferSet(
+            if r == 0 then [
+                ScriptTransfer(i.caller, 1 * waves, unit),
+                ScriptTransfer(p2PublicKey.addressFromPublicKey(), 1 * waves, unit)
+            ] else if r < 0 then [
+                ScriptTransfer(i.caller, 2 * waves, unit)
+            ] else [
+                ScriptTransfer(p2PublicKey.addressFromPublicKey(), 2 * waves, unit)
+            ]
+        )
+	)
+}
+
+@Callable(i)
+func   timeout (fightId: String) = {
+
+    if !this.getBinary(fightId).isDefined() then throw("Fight is not found.") else
+
+    let fightData = this.getBinaryValue(fightId)
+
+    if fightData.size() == hashSize then throw("Fight is not started.") else
+    if fightData.size() > hashSize + longSize + keySize + movesCount then throw("Fight is already finished.") else
+
+    let h = fightData.drop(hashSize).take(longSize).toInt()
+
+    if height - h < fightTimeout then throw("Player1 still has a time to complete the fight.") else
+    
+    let p2PublicKey = fightData.dropRight(movesCount).takeRight(keySize)
+
+	ScriptResult(
+		WriteSet([
+			store(fightId, p2PublicKey)
+		]), 
+		TransferSet([
+			ScriptTransfer(p2PublicKey.addressFromPublicKey(), 2 * waves, unit)
+		])
+	)
+}
+
+

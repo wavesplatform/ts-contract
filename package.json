@@ -1,0 +1,25 @@
+{
+  "name": "@waves/ts-contract",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "ts-node src/bin.ts 3MwGdE779Vhf4bkn8UbqQqEQwos38KtWhsn contractDefinition.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wavesplatform/ts-contract.git"
+  },
+  "bin": {
+    "waves-games": "./bin.js"
+  },
+  "keywords": [],
+  "author": "Yuriy Naydenov",
+  "license": "MIT",
+  "dependencies": {
+    "@waves/waves-crypto": "^3.0.14",
+    "@waves/waves-rest": "0.0.26",
+    "@waves/waves-transactions": "^3.10.3"
+  }
+}
