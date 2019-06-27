@@ -12,7 +12,7 @@
     "url": "https://github.com/wavesplatform/ts-contract.git"
   },
   "bin": {
-    "waves-games": "./bin.js"
+    "ts-contract": "./bin.js"
   },
   "keywords": [],
   "author": "Yuriy Naydenov",
