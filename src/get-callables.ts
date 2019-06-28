@@ -1,10 +1,8 @@
 import axios from 'axios'
 import { wavesApi, config, axiosHttp } from '@waves/waves-rest'
 import { base58Decode, ChaidId, verifyAddress } from '@waves/waves-crypto'
-import { path } from 'filenamify'
-import { basename, resolve } from 'path'
-import { writeFileSync, readFileSync } from 'fs'
-import { createContractDefinition } from '.'
+import { resolve } from 'path'
+import { readFileSync } from 'fs'
 
 const callableRegex = /@Callable\s?.*?func\s+(?<name>\w+)\s?\((?<params>.*?)\)/gs
 const funcRegex = /func\s+(?<name>[^\( ]*)\s?(?<params>\(.*?\))/
