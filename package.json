@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "rm -fr dist && tsc && cp package.json dist && cp README.md dist",
-    "deploy": "cd dist && npm publish && cd ../ && npm patch",
+    "deploy:patch": "cd dist && npm version patch && npm publish && cd ../ && npm version patch",
     "test": "ts-node src/bin.ts 3MwGdE779Vhf4bkn8UbqQqEQwos38KtWhsn contractDefinition.ts"
   },
   "repository": {
