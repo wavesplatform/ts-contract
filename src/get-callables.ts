@@ -37,9 +37,10 @@ export const getCallablesFromRide = (code: string): ICallable[] => {
     ({
       func: funcRegex.exec(x)!.groups!.name,
       args: funcRegex.exec(x)!.groups!.params.slice(1, -1).split(',').map(arg => {
+        if (!arg) return undefined
         const [name, type] = arg.split(':').map(x => x.trim())
         return { name, type }
-      }),
+      }).filter(x => x),
     }))
 }
 

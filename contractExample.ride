@@ -117,6 +117,13 @@ func complete(fightId: String, moves: ByteVector) = {
 	)
 }
 
+
+@Callable(i)
+func foo () = {
+  
+}
+
+
 @Callable(i)
 func   timeout (fightId: String) = {
 
