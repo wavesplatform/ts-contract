@@ -23,5 +23,8 @@
     "@waves/waves-crypto": "^3.0.14",
     "@waves/waves-rest": "0.0.26",
     "@waves/waves-transactions": "^3.10.3"
+  },
+  "devDependencies": {
+    "@types/node": "^12.7.8"
   }
 }
