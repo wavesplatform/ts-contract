@@ -45,14 +45,17 @@ type Args<T> = T extends (...args: infer U) => infer R ? U : never
 type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>
 type Optional<T, K extends keyof T> = Omit<T, K> & Partial<T>
 type Return<T, R> = (...a: Args<T>) => R
-type TContract<TDapp, TBuilder> = Omit<{ [TFunc in keyof TDapp]: Return<TDapp[TFunc], TBuilder> }, 'id'> & { id: string }
+type TContract<TDapp, TBuilder> = Omit<{ [TFunc in keyof TDapp]: Return<TDapp[TFunc], TBuilder> }, 'id'> & {
+  id: string
+}
 
+type TInvokeScriptTx = IInvokeScriptTransaction & WithId
 type TInvokeMap = {
   undefined: {
-    invoke: (seed: string, params: Omit<IInvokeScriptParams, 'call'>) => IInvokeScriptTransaction
+    invoke: (seed: string, params: Omit<IInvokeScriptParams, 'call'>) => TInvokeScriptTx
   }
   string: {
-    invoke(seed: string, params?: Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'>): IInvokeScriptTransaction
+    invoke(seed: string, params?: Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'>): TInvokeScriptTx
   }
 }
 
