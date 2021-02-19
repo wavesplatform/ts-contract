@@ -4,7 +4,7 @@ import { createContractDefinition } from './create-definition'
 import { resolve, basename } from 'path'
 import { getCallables } from './get-callables'
 import { writeFileSync } from 'fs'
-import { verifyAddress } from '@waves/waves-crypto'
+import { verifyAddress } from '@waves/ts-lib-crypto'
 
 export const createDefinition = async (dAppAddressOrFileOrCode: string, path: string) => {
   const p = resolve(process.cwd(), path)

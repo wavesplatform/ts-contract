@@ -1,0 +1,218 @@
+{-# STDLIB_VERSION 5 #-}
+{-# CONTENT_TYPE DAPP #-}
+{-# SCRIPT_TYPE ACCOUNT #-}
+
+
+func readIntOr(key: String, default: Int) = if isDefined(getInteger(this, key)) then getIntegerValue(this, key) else default
+func readInt(key: String) = if isDefined(getInteger(this, key)) then getIntegerValue(this, key) else throw("State is not set: " + key)
+func readString(key: String) = if isDefined(getString(this, key)) then getStringValue(this, key) else throw("State is not set: " + key)
+func writeInt(key: String, value: Int) = IntegerEntry(key, value)
+func changeBy(key: String, value: Int) = key.writeInt(key.readIntOr(0) + value)
+func writeString(key: String, value: String) = StringEntry(key, value)
+func writeConstString(key: String, value: String) = if !isDefined(getString(this, key)) then StringEntry(key, value) else throw("State was already defined: " + key)
+
+func extReadString(keyAndAddress: (String, String)) = {
+  let (key, address) = keyAndAddress
+  let a = address.addressFromStringValue()
+  if isDefined(getString(a, key)) then getStringValue(a, key) else throw("State is not set: " + key)
+}
+
+func extReadInt(keyAndAddress: (String, String)) = {
+  let (key, address) = keyAndAddress
+  let a = address.addressFromStringValue()
+  if isDefined(getInteger(a, key)) then getIntegerValue(a, key) else throw("State is not set: " + key)
+}
+
+let precision = 10000
+
+
+## <Config>
+let assetIdStore = "assetId"
+let APointStore = "APoint"
+let BPointStore = "BPoint"
+let CPointStore = "CPoint"
+let DPointStore = "DPoint"
+let aTokenNameStore = "aTokenName"
+let aTokenDescriptionStore = "aTokenDescription"
+let aTokenDecimalsStore = "aTokenDecimals"
+## </Config>
+
+## <Local>
+let configAddressStore = "configAddress"
+let aTokenIdStore = "aTokenId"
+let startingHeightStore = "startingHeight"
+let lastUpdateHeightStore = "lastUpdateHeight"
+let totalDepositStore = "totalDeposit"
+let totalBorrowNormalizedStore = "totalBorrowNormalized"
+let rateIncrementStore = "rateIncrement"
+let currentRateStore = "currentRate"
+## </Local>
+
+let startingHeight = startingHeightStore.readInt()
+let lastUpdateHeight = lastUpdateHeightStore.readIntOr(startingHeight)
+let assetId = this.getStringValue(assetIdStore).fromBase58String()
+let aTokenId = aTokenIdStore.readString().fromBase58String()
+let reserveUtilization = max([0, 100 - fraction(100, assetBalance(this, assetId), totalDepositStore.readInt())]) ## 0 - 100
+let rateIncrement = rateIncrementStore.readIntOr(0)
+let currentRate = currentRateStore.readIntOr(1)
+
+
+let rate = currentRate + fraction(height - lastUpdateHeight, rateIncrement, 100)
+
+func callerDepositStore(i: Invocation) = i.caller.toString() + "_deposit"
+func callerBorrowStore(i: Invocation) = i.caller.toString() + "_borrow"
+
+func depositaryValueShare(i: Invocation, value: Int) = fraction(value, callerDepositStore(i).readInt(), totalDepositStore.readInt())
+
+let rateIncrementUpdate = {
+
+  let configAddress = configAddressStore.readString()
+
+  let a = (APointStore, configAddress).extReadInt()
+  let b = (BPointStore, configAddress).extReadInt()
+  let c = (CPointStore, configAddress).extReadInt()
+  let d = (DPointStore, configAddress).extReadInt()
+
+  let x = reserveUtilization
+
+  let line1 = fraction(a - c, x, -b) + a
+  let line2 = fraction(c - d, x - b, b - 100) + c
+
+  if x < b then line1 else line2
+}
+
+func normalize(value: Int) = fraction(value, precision, rate)
+func denormalize(value: Int) = fraction(value, rate, precision)
+func changeByNormalized(key: String, value: Int) = key.writeInt((key.readIntOr(0).denormalize() + value).normalize())
+
+func paymentAmountValidate(i: Invocation, assetId: ByteVector) = {
+  let p = i.payments[0].amount
+  if p <= 0 then throw("Payment is less than min allowed amount") else ##TODO min payment
+  if i.payments[0].assetId != assetId then throw("Config assetId does not match with payment") else p
+}
+
+func borrowCollateralCheck(i: Invocation, amountToBorrow: Int) = {
+  true ##TODO
+}
+
+func unstakeCollateralCheck(i: Invocation, amountToUnstake: Int) = {
+
+  let callerDeposit = callerDepositStore(i).readInt()
+  let callerYield = depositaryValueShare(i, totalBorrowNormalizedStore.readInt().denormalize())
+  let totalAvailableForWithdraw = callerDeposit + callerYield
+
+  if(totalAvailableForWithdraw < amountToUnstake) then throw("Insufficient funds for withdrawal, max: " + totalAvailableForWithdraw.toString()) else 
+
+  (callerDeposit, callerYield)
+}
+
+func liquidityCheck(amount: Int) = {
+  true ##TODO
+}
+
+func mintAToken(i: Invocation, amount: Int) = [
+    Reissue(aTokenId, amount, true),
+    ScriptTransfer(i.caller, amount, aTokenId)
+]
+
+
+
+let stateUpdates = [
+  currentRateStore.writeInt(rate),
+  lastUpdateHeightStore.writeInt(height),
+  rateIncrementStore.writeInt(rateIncrementUpdate)
+]
+
+##rateIncrement will be replaced with curve\lines params
+
+@Callable(i)
+func initialize(configAddress: String, assetId: String, aTokenName: String, aTokenDescription: String, aTokenDecimals: Int) = {
+  let aToken = Issue(aTokenName, aTokenDescription, 0, aTokenDecimals, true)
+  [
+    aToken,
+    assetIdStore.writeConstString(assetId),
+    configAddressStore.writeConstString(configAddress),
+    aTokenIdStore.writeConstString(calculateAssetId(aToken).toBase58String()),
+    rateIncrementStore.writeInt(rateIncrement),
+    startingHeightStore.writeInt(height)
+  ]
+}
+
+
+
+@Callable(i)
+func repay() = { 
+  let paymentAmount = paymentAmountValidate(i, assetId)
+
+  [
+    callerBorrowStore(i).changeByNormalized(-paymentAmount),
+    totalBorrowNormalizedStore.changeByNormalized(-paymentAmount)
+  ] ++ stateUpdates
+}
+
+@Callable(i)
+func deposit() = { 
+  let paymentAmount = paymentAmountValidate(i, assetId)
+
+  mintAToken(i, paymentAmount) ++ stateUpdates
+}
+
+@Callable(i)
+func stake() = { 
+  let paymentAmount = paymentAmountValidate(i, aTokenId)
+
+  [
+    callerDepositStore(i).changeBy(paymentAmount),
+    totalDepositStore.changeBy(paymentAmount)
+  ] ++ stateUpdates
+}
+
+
+@Callable(i)
+func borrow(amountToBorrow: Int) = { 
+  
+  if borrowCollateralCheck(i, amountToBorrow)
+  && liquidityCheck(amountToBorrow) 
+  
+  then 
+  
+    [
+      callerBorrowStore(i).changeByNormalized(amountToBorrow),
+      totalBorrowNormalizedStore.changeByNormalized(amountToBorrow),
+      ScriptTransfer(i.caller, amountToBorrow, assetId)
+    ] ++ stateUpdates
+  
+  else throw()
+}
+
+
+@Callable(i)
+func unstake(amountToUnstake: Int) = { 
+  
+  let (callerDeposit, callerYield) = unstakeCollateralCheck(i, amountToUnstake)
+
+  let callerDepositChange = callerYield - amountToUnstake
+
+  [
+    callerDepositStore(i).changeBy(callerDepositChange),
+    ScriptTransfer(i.caller, amountToUnstake, aTokenId)
+  ] ++ stateUpdates
+}
+
+@Callable(i)
+func withdraw() = { 
+
+  let amountToWithdraw = paymentAmountValidate(i, aTokenId)
+
+  let n = Invoke(i.caller, "", [i.caller], [])
+  
+  if liquidityCheck(amountToWithdraw) then
+
+  ([
+    Burn(aTokenId, amountToWithdraw),
+    ScriptTransfer(i.caller, amountToWithdraw, assetId)
+    
+  ], 0)
+
+  else throw()
+} 

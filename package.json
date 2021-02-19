@@ -1,27 +1,30 @@
 {
   "name": "@waves/ts-contract",
-  "version": "0.0.8",
+  "version": "0.0.11",
   "description": "Create strongly typed invokes for your ride contracts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "rm -fr dist && tsc && cp package.json dist && cp README.md dist",
-    "deploy:patch": "cd dist && npm version patch && npm publish && cd ../ && npm version patch",
-    "test": "ts-node src/bin.ts 3MwGdE779Vhf4bkn8UbqQqEQwos38KtWhsn contractDefinition.ts"
+    "build": "rm -fr dist && tsc && cp README.md ./dist && cp package.json ./dist",
+    "deploy": "npm run build && cd ./dist && npm version patch && cp package.json ../ && npm publish",
+    "test": "ts-node src/bin.ts example2.ride contractDefinition.ts"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/wavesplatform/ts-contract.git"
   },
   "bin": {
-    "ts-contract": "./bin.js"
+    "ts-contract": "bin.js"
   },
   "keywords": [],
   "author": "Yuriy Naydenov",
   "license": "MIT",
   "dependencies": {
-    "@waves/waves-crypto": "^3.0.14",
-    "@waves/waves-rest": "0.0.26",
-    "@waves/waves-transactions": "^3.10.3"
+    "@waves/ts-lib-crypto": "1.4.3",
+    "@waves/waves-rest": "0.0.77",
+    "@waves/waves-transactions": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "14.14.30"
   }
 }

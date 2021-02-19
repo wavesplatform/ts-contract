@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { wavesApi, config, axiosHttp } from '@waves/waves-rest'
-import { base58Decode, ChaidId, verifyAddress } from '@waves/waves-crypto'
+import { base58Decode, ChaidId, verifyAddress } from '@waves/ts-lib-crypto'
 import { resolve } from 'path'
 import { readFileSync } from 'fs'
 
