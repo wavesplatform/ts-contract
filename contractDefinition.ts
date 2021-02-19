@@ -1,5 +1,5 @@
 
-import { ByteVector, contract } from '@waves/ts-contract'
+import { ByteVector, contract } from './src/contract'
 
 export interface contractDefinition {
   initialize(configAddress: String, assetId: String, aTokenName: String, aTokenDescription: String, aTokenDecimals: Number): void
@@ -8,7 +8,9 @@ export interface contractDefinition {
   stake(): void
   borrow(amountToBorrow: Number): void
   unstake(amountToUnstake: Number): void
-  withdraw()
+  withdraw(): void
 }
 
 export const { initialize, repay, deposit, stake, borrow, unstake, withdraw } = contract<contractDefinition>()()
+
+

@@ -50,34 +50,59 @@ type TContract<TDapp, TBuilder> = Omit<{ [TFunc in keyof TDapp]: Return<TDapp[TF
 }
 
 type TInvokeScriptTx = IInvokeScriptTransaction & WithId
-type TInvokeMap = {
-  undefined: {
-    invoke: (seed: string, params: Omit<IInvokeScriptParams, 'call'>) => TInvokeScriptTx
-  }
-  string: {
-    invoke(seed: string, params?: Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'>): TInvokeScriptTx
-  }
+
+
+
+type WithSeed = {
+  seed: string
 }
 
-type TInvoke<TAddress extends string | undefined> = TInvokeMap[TAddress extends undefined ? 'undefined' : 'string']
+type TDefaultContractParams = {
+  dApp?: string
+  seed?: string
+} | undefined
 
-export const contract = <TDefinition>() => <TAddress extends string | undefined = undefined>(dApp: TAddress = undefined): TContract<TDefinition, TInvoke<TAddress>> =>
+type TInvokeScriptParams<TDefaultParams> =
+  TDefaultParams extends undefined
+  ? Omit<IInvokeScriptParams, 'call'> & WithSeed
+  : TDefaultParams extends { dApp: string, seed: string }
+  ? Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'> & { seed?: string }
+  : TDefaultParams extends { dApp: string }
+  ? Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'> & WithSeed
+  : Omit<IInvokeScriptParams, 'call'> & { seed?: string }
+
+type TInvoke<TDefaultParams> =
+  TDefaultParams extends { dApp: string, seed: string }
+  ? { invoke: (params?: TInvokeScriptParams<TDefaultParams>) => TInvokeScriptTx }
+  : { invoke: (params: TInvokeScriptParams<TDefaultParams>) => TInvokeScriptTx }
+
+
+export const contract = <TDefinition>() => <T extends TDefaultContractParams = undefined>(contractParams: T = undefined): TContract<TDefinition, TInvoke<T>> =>
   new Proxy({}, {
     get: (_: any, name: string) =>
-      (...args: any[]): TInvoke<TAddress> =>
-      ({
-        invoke: (seed: string, params?: IInvokeScriptParams) =>
-          invokeScript({
-            chainId: base58Decode(((params || { dApp: undefined }).dApp || dApp) || base64Encode([0, MAIN_NET_CHAIN_ID]))[1],
-            dApp,
-            call: {
-              function: name,
-              args: args.map(mapArg),
-            },
-            ...params,
-          }, seed),
-      }),
-  }) as TContract<TDefinition, TInvoke<TAddress>>
+      (...args: any[]): TInvoke<T> =>
+        ({
+          invoke: (params?: TInvokeScriptParams<T>) => {
+
+            const dApp = params?.dApp ?? contractParams.dApp
+            const seed = params?.seed ?? contractParams.seed
+
+            return invokeScript({
+              chainId: base58Decode(((params || { dApp: undefined }).dApp || dApp) || base64Encode([0, MAIN_NET_CHAIN_ID]))[1],
+              dApp,
+              call: {
+                function: name,
+                args: args.map(mapArg),
+              },
+              ...params,
+            }, seed)
+          },
+        }) as any,
+  }) as TContract<TDefinition, TInvoke<T>>
+
+
+
+
 
 
 
