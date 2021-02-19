@@ -1,5 +1,5 @@
 import { base64Encode, base58Decode, MAIN_NET_CHAIN_ID } from '@waves/ts-lib-crypto'
-import { IInvokeScriptTransaction, invokeScript, IInvokeScriptParams } from '@waves/waves-transactions'
+import { IInvokeScriptTransaction, invokeScript, IInvokeScriptParams, WithId } from '@waves/waves-transactions'
 
 export type ByteVector = Uint8Array | Array<number> | Buffer
 export type DataTypes = 'binary' | 'integer' | 'boolean' | 'string'

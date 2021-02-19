@@ -10,7 +10,7 @@ export const createContractDefinition = (name: string, callables: ICallable[], d
 import { ByteVector, contract${name === 'contract' ? ' as createContract' : ''} } from '@waves/ts-contract'
 
 export interface ${name} {
-  ${callables.map(c => `${c.func}(${c.args.map(({ name, type }) => `${name}: ${type ? mapTypeToJs(type) : typeUnion}`).join(', ')})`).join('\n  ')}
+  ${callables.map(c => `${c.func}(${c.args.map(({ name, type }) => `${name}: ${type ? mapTypeToJs(type) : typeUnion}`).join(', ')})`).join(': void\n  ')}
 }
 
 export const { ${callables.map(c => c.func).join(', ')} } = ${name === 'contract' ? 'createContract' : 'contract'}<${name}>()(${dAppAddress ? `'${dAppAddress}'` : ''})
