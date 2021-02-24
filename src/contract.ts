@@ -43,7 +43,7 @@ const mapArg = (value: String | Boolean | Number | ByteVector): TInvokeScriptCal
 
 type InvokeScriptTx = IInvokeScriptTransaction & WithId
 
-type InvokeParams = Partial<Omit<IInvokeScriptParams, 'call'>> & { seed?: string }
+export type InvokeParams = Partial<Omit<IInvokeScriptParams, 'call'>> & { seed?: string }
 
 type Index = { [k: string]: any }
 
