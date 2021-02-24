@@ -1,27 +1,16 @@
 
-import { address, randomSeed } from '@waves/ts-lib-crypto'
-import { contract } from './src/cont'
+import { ByteVector, contract } from '@waves/ts-contract'
 
 export interface contractDefinition {
-  initialize(configAddress: String, assetId: String, aTokenName: String, aTokenDescription: String, aTokenDecimals: Number): void
+  initialize(configAddress: String, oracleAddress: String, assetId: String, aTokenName: String, aTokenDescription: String, aTokenDecimals: Number): void
+  borrowPower(address: String): void
+  assetToUsd(assetAmount: Number): void
   repay(): void
   deposit(): void
   stake(): void
-  borrow(amountToBorrow: Number): void
+  borrowFor(address: String, amountToBorrow: Number): void
   unstake(amountToUnstake: Number): void
-  withdraw(): void
+  withdrawFor(address: String): void
 }
 
-export const { initialize, repay, deposit, stake, borrow, unstake, withdraw } = contract<contractDefinition>()()
-
-export const create = () => { 
-  contract<contractDefinition>()()
-}
-
-
-const a = contract<contractDefinition>()({ dApp: address(randomSeed()), seed: '' }).borrow([0], { payment: [{ amount: 10 }] })
-
-
-// invokeBroadcaster<contractDefinition>((tx) => Promise.resolve(tx))({ dApp: '' })
-// invokeBuilder<contractDefinition>()().borrow(0).build()
-
+export const { initialize, borrowPower, assetToUsd, repay, deposit, stake, borrowFor, unstake, withdrawFor } = contract<contractDefinition>()()

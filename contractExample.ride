@@ -1,153 +1,246 @@
-{-# STDLIB_VERSION 3 #-}
+{-# STDLIB_VERSION 5 #-}
 {-# CONTENT_TYPE DAPP #-}
 {-# SCRIPT_TYPE ACCOUNT #-}
 
-let waves = 100000000
-let empty = base58''
-let hashSize = 32
-let keySize = 32
-let longSize = 8
-let fightTimeout = 100
-let movesCount = 3
 
-let rock = base58'1'
-let paper = base58'2'
-let scissors = base58'3'
+func readIntOr(key: String, default: Int) = if isDefined(getInteger(this, key)) then getIntegerValue(this, key) else default
+func readInt(key: String) = if isDefined(getInteger(this, key)) then getIntegerValue(this, key) else throw("State is not set: " + key)
+func readString(key: String) = if isDefined(getString(this, key)) then getStringValue(this, key) else throw("State is not set: " + key)
+func writeInt(key: String, value: Int) = IntegerEntry(key, value)
+func changeBy(key: String, value: Int) = key.writeInt(key.readIntOr(0) + value)
+func writeString(key: String, value: String) = StringEntry(key, value)
+func writeConstString(key: String, value: String) = if !isDefined(getString(this, key)) then StringEntry(key, value) else throw("State was already defined: " + key)
 
-func get(bytes: ByteVector, index: Int) = {
-    bytes.drop(index).take(1)
+func extReadString(keyAndAddress: (String, String)) = {
+  let (key, address) = keyAndAddress
+  let a = address.addressFromStringValue()
+  if isDefined(getString(a, key)) then getStringValue(a, key) else throw("State is not set: " + key)
 }
 
-func getBinaryOr(key: String, default: ByteVector) = if isDefined(getBinary(this, key)) then getBinaryValue(this, key) else default
-
-func isValidMove(move: ByteVector) = {
-    move == rock || move == paper || move == scissors
+func extReadInt(keyAndAddress: (String, String)) = {
+  let (key, address) = keyAndAddress
+  let a = address.addressFromStringValue()
+  if isDefined(getInteger(a, key)) then getIntegerValue(a, key) else throw("State is not set: " + key)
 }
 
-func isValidMoves(moves: ByteVector) = {
-    moves.size() >= movesCount &&
-    moves.get(0).isValidMove() &&
-    moves.get(1).isValidMove() &&
-    moves.get(2).isValidMove()
+let a = 10000
+
+## <Config>
+let assetIdStore = "assetId"
+
+## <Local>
+let configAddressStore = "configAddress"
+let oracleStore = "oracleAddress"
+let aTokenIdStore = "aTokenId"
+let startingHeightStore = "startingHeight"
+let lastUpdateHeightStore = "lastUpdateHeight"
+let totalStakeStore = "totalStake"
+let totalBorrowNormalizedStore = "totalBorrowNormalized"
+let rateIncrementStore = "rateIncrement"
+let currentRateStore = "currentRate"
+let aTokenDecimalsStore = "aTokenDecimals"
+## </Local>
+
+let assetIdStr = this.getStringValue(assetIdStore)
+let assetId = assetIdStr.fromBase58String()
+let assetDecimals = aTokenDecimalsStore.readInt()
+
+let oraclePrice = match Invoke(addressFromStringValue(getStringValue(this,oracleStore)), "price", [assetIdStr], []) {
+    case i: Int => i
+    case _ => throw("bad oracle data")
+}
+let startingHeight = startingHeightStore.readInt()
+let lastUpdateHeight = lastUpdateHeightStore.readIntOr(startingHeight)
+
+
+let APointStore = assetIdStr + "_APoint"
+let BPointStore = assetIdStr + "_BPoint"
+let CPointStore = assetIdStr + "_CPoint"
+let DPointStore = assetIdStr + "_DPoint"
+
+let aTokenId = aTokenIdStore.readString().fromBase58String()
+let reserveUtilization = {
+  let total = totalStakeStore.readIntOr(0)
+  let utilization = if total > 0 then fraction(100, assetBalance(this, assetId), total) else 100
+  max([0, 100 - utilization]) ## 0 - 100
+}
+let rateIncrement = rateIncrementStore.readIntOr(0)
+let currentRate = currentRateStore.readIntOr(1)
+
+
+let rate = currentRate + fraction(height - lastUpdateHeight, rateIncrement, 100)
+
+func stakeStore(userAddress: String) = userAddress + "_stake"
+func borrowStore(userAddress: String) = userAddress + "_borrow"
+
+func stakerValueShare(i: Invocation, value: Int) = {
+  let total = totalStakeStore.readIntOr(0)
+  if total > 0 then fraction(value, stakeStore(i.caller.toString()).readInt(), totalStakeStore.readIntOr(0)) else 0
 }
 
-func round(p1Moves: ByteVector, p2Moves: ByteVector, round: Int) = {
-    let m1 = p1Moves.get(round)
-    let m2 = p2Moves.get(round)
+let rateIncrementUpdate = {
 
-    if m1 == m2 then 0 else
-    if (m1 == scissors && m2 == paper) ||
-    (m1 == rock && m2 == scissors) ||
-    (m1 == paper && m2 == rock) then -1 else 1
+  let configAddress = configAddressStore.readString()
+
+  let a = (APointStore, configAddress).extReadInt()
+  let b = (BPointStore, configAddress).extReadInt()
+  let c = (CPointStore, configAddress).extReadInt()
+  let d = (DPointStore, configAddress).extReadInt()
+
+  let x = reserveUtilization
+
+  let line1 = fraction(a - c, x, -b) + a
+  let line2 = fraction(c - d, x - b, b - 100) + c
+
+  if x < b then line1 else line2
 }
 
-func fight(p1Moves: ByteVector, p2Moves: ByteVector) = {
-    round(p1Moves, p2Moves, 0) + 
-    round(p1Moves, p2Moves, 1) + 
-    round(p1Moves, p2Moves, 2) 
+func normalize(value: Int) = fraction(value, precision, rate)
+func denormalize(value: Int) = fraction(value, rate, precision)
+func changeByNormalized(key: String, value: Int) = key.writeInt((key.readIntOr(0).denormalize() + value).normalize())
+
+func paymentAmountValidate(i: Invocation, assetId: ByteVector) = {
+  let p = i.payments[0].amount
+  if p <= 0 then throw("Payment is less than min allowed amount") else ##TODO min payment
+  if i.payments[0].assetId != assetId then throw("Config assetId does not match with payment") else p
 }
 
-## Fight data: [p1 movesHash][p2 join height][p2 public key][p2 moves][p1 move | p2 public key (timeout case)]
-##                32 bytes        8 bytes        32 bytes     3 bytes       32 bytes
-func store(fightId: String, data: ByteVector) = {
-    DataEntry(fightId, fightId.getBinaryOr(empty) + data)
+func borrowCollateralCheck(i: Invocation, amountToBorrow: Int) = {
+  true ##TODO
+}
+
+func unstakeCollateralCheck(i: Invocation, amountToUnstake: Int) = {
+
+  let callerStake = stakeStore(i.caller.toString()).readInt()
+  let callerYield = stakerValueShare(i, totalBorrowNormalizedStore.readIntOr(0).denormalize())
+  let totalAvailableForWithdraw = callerStake + callerYield
+
+  if(totalAvailableForWithdraw < amountToUnstake) then throw("Insufficient funds for unstake, max: " + totalAvailableForWithdraw.toString()) else 
+
+  (callerStake, callerYield)
+}
+
+func amountToUsd(amount: Int) =
+  fraction(amount, oraclePrice, pow(10, 0, assetDecimals, 0, 0, FLOOR))
+
+func liquidityCheck(amount: Int) = {
+  true ##TODO
+}
+
+func mintAToken(i: Invocation, amount: Int) = [
+    Reissue(aTokenId, amount, true),
+    ScriptTransfer(i.caller, amount, aTokenId)
+]
+
+
+
+let stateUpdates = [
+  currentRateStore.writeInt(rate),
+  lastUpdateHeightStore.writeInt(height),
+  rateIncrementStore.writeInt(rateIncrementUpdate)
+]
+
+##rateIncrement will be replaced with curve\lines params
+
+@Callable(i)
+func initialize(
+    configAddress: String,
+    oracleAddress: String,
+    assetId: String,
+    aTokenName: String,
+    aTokenDescription: String,
+    aTokenDecimals: Int) = {
+  let aToken = Issue(aTokenName, aTokenDescription, 0, aTokenDecimals, true)
+  [
+    aToken,
+    oracleStore.writeConstString(oracleAddress),
+    aTokenDecimalsStore.writeInt(aTokenDecimals),
+    assetIdStore.writeConstString(assetId),
+    configAddressStore.writeConstString(configAddress),
+    aTokenIdStore.writeConstString(calculateAssetId(aToken).toBase58String()),
+    rateIncrementStore.writeInt(rateIncrement),
+    startingHeightStore.writeInt(height)
+  ]
 }
 
 @Callable(i)
-func create(movesHash: ByteVector) = {
-
-    let p = i.payment.extract()
-
-    if p.assetId.isDefined() then throw("Payment should be in WAVES.") else
-    if p.amount != 1 * waves then throw("Amount should be 1 WAVE.") else
-    if movesHash.size() != hashSize then throw("Invalid moves.") else
-
-	WriteSet([
-        store(i.callerPublicKey.toBase58String() + "_" + i.transactionId.toBase58String(), movesHash)  
-	])
+func borrowPower(address: String) = {
+  let borrow = borrowStore(address).readIntOr(0).denormalize()
+  let stake = stakeStore(address).readIntOr(0)
+  ([], amountToUsd(stake - borrow))
 }
 
 @Callable(i)
-func join(fightId: String, moves: ByteVector) = {
+func assetToUsd(assetAmount: Int) = ([], amountToUsd(assetAmount)) 
 
-    let p = i.payment.extract()
 
-    if p.assetId.isDefined() then throw("Payment should be in WAVES.") else
-    if p.amount != 1 * waves then throw("Amount should be 1 WAVE.") else
-    if !this.getBinary(fightId).isDefined() then throw("Fight is not found.") else
-    if this.getBinaryValue(fightId).size() != hashSize then throw("Fight is already started.") else
-    if !isValidMoves(moves) then throw("Invalid moves.") else
-    
-    WriteSet([
-        store(fightId, height.toBytes() + i.callerPublicKey + moves)
-	])
+@Callable(i)
+func repay() = { 
+  let paymentAmount = paymentAmountValidate(i, assetId)
+
+  [
+    borrowStore(i.caller.toString()).changeByNormalized(-paymentAmount),
+    totalBorrowNormalizedStore.changeByNormalized(-paymentAmount)
+  ] ++ stateUpdates
 }
 
 @Callable(i)
-func complete(fightId: String, moves: ByteVector) = {
+func deposit() = { 
+  let paymentAmount = paymentAmountValidate(i, assetId)
 
-    if !this.getBinary(fightId).isDefined() then throw("Fight is not found.") else
+  mintAToken(i, paymentAmount) ++ stateUpdates
+}
 
-    let fightData = this.getBinaryValue(fightId)
+@Callable(i)
+func stake() = { 
+  let paymentAmount = paymentAmountValidate(i, aTokenId)
 
-    if fightData.size() == hashSize then throw("Fight is not started.") else
-    if fightData.size() > hashSize + longSize + keySize + movesCount then throw("Fight is already finished.") else
-
-    let hashedMoves = this.getBinaryValue(fightId).take(hashSize)
-
-    if hashedMoves != blake2b256(moves) || !isValidMoves(moves) then throw("Invalid moves.") else
-
-    let p2PublicKey = fightData.dropRight(movesCount).takeRight(keySize)
-    let r = fight(moves.take(movesCount), fightData.takeRight(movesCount))
-
-	ScriptResult(
-		WriteSet([
-			store(fightId, moves)
-		]), 
-        TransferSet(
-            if r == 0 then [
-                ScriptTransfer(i.caller, 1 * waves, unit),
-                ScriptTransfer(p2PublicKey.addressFromPublicKey(), 1 * waves, unit)
-            ] else if r < 0 then [
-                ScriptTransfer(i.caller, 2 * waves, unit)
-            ] else [
-                ScriptTransfer(p2PublicKey.addressFromPublicKey(), 2 * waves, unit)
-            ]
-        )
-	)
+  [
+    stakeStore(i.caller.toString()).changeBy(paymentAmount),
+    totalStakeStore.changeBy(paymentAmount)
+  ] ++ stateUpdates
 }
 
 
 @Callable(i)
-func foo () = {
+func borrowFor(address: String, amountToBorrow: Int) = {
+
+    if stakeStore(address).readIntOr(0) > 0 then throw("can't borrow same asset as deposited") else 
+
+    [
+      borrowStore(address).changeByNormalized(amountToBorrow),
+      totalBorrowNormalizedStore.changeByNormalized(amountToBorrow),
+      ScriptTransfer(address.addressFromStringValue(), amountToBorrow, assetId)
+    ] ++ stateUpdates
+}
+
+
+@Callable(i)
+func unstake(amountToUnstake: Int) = { 
   
-}
+  let (callerStake, callerYield) = unstakeCollateralCheck(i, amountToUnstake)
 
+  let callerStakeChange = callerYield - amountToUnstake
+
+  [
+    stakeStore(i.caller.toString()).changeBy(callerStakeChange),
+    ScriptTransfer(i.caller, amountToUnstake, aTokenId)
+  ] ++ stateUpdates
+}
 
 @Callable(i)
-func   timeout (fightId: String) = {
+func withdrawFor(address: String) = { 
 
-    if !this.getBinary(fightId).isDefined() then throw("Fight is not found.") else
+  let user = address.addressFromStringValue()
 
-    let fightData = this.getBinaryValue(fightId)
+  let amountToWithdraw = paymentAmountValidate(i, aTokenId)
 
-    if fightData.size() == hashSize then throw("Fight is not started.") else
-    if fightData.size() > hashSize + longSize + keySize + movesCount then throw("Fight is already finished.") else
+  if liquidityCheck(amountToWithdraw) then
 
-    let h = fightData.drop(hashSize).take(longSize).toInt()
+  [
+    Burn(aTokenId, amountToWithdraw),
+    ScriptTransfer(user, amountToWithdraw, assetId)
+  ] ++ stateUpdates
 
-    if height - h < fightTimeout then throw("Player1 still has a time to complete the fight.") else
-    
-    let p2PublicKey = fightData.dropRight(movesCount).takeRight(keySize)
-
-	ScriptResult(
-		WriteSet([
-			store(fightId, p2PublicKey)
-		]), 
-		TransferSet([
-			ScriptTransfer(p2PublicKey.addressFromPublicKey(), 2 * waves, unit)
-		])
-	)
+  else throw()
 }
-
-

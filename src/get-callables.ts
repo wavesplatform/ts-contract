@@ -5,7 +5,7 @@ import { resolve } from 'path'
 import { readFileSync } from 'fs'
 
 const callableRegex = /@Callable\s?.*?func\s+(?<name>\w+)\s?\((?<params>.*?)\)/gs
-const funcRegex = /func\s+(?<name>[^\( ]*)\s?(?<params>\(.*?\))/
+const funcRegex = /func\s+(?<name>[^\( ]*)\s?(?<params>\(.*?\))/s
 
 export interface IArg {
   name: string
