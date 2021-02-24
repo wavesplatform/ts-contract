@@ -1,3 +1,3 @@
 export { getCallablesFromAddress, getCallablesFromBinary, getCallablesFromRide, getCallables } from './get-callables'
 export { createContractDefinition } from './create-definition'
-export { ByteVector, contract } from './contract'
+export { ByteVector, InvokeParams, contract } from './contract'

@@ -1,6 +1,6 @@
 {
   "name": "@waves/ts-contract",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Create strongly typed invokes for your ride contracts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
