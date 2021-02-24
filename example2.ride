@@ -162,11 +162,13 @@ func stake() = {
   let paymentAmount = paymentAmountValidate(i, aTokenId)
 
   [
-    callerDepositStore(i).changeBy(paymentAmount),
+    G(i).changeBy(paymentAmount),
     totalDepositStore.changeBy(paymentAmount)
   ] ++ stateUpdates
 }
 
+##TODO
+##Deny borrow in deposited asset
 
 @Callable(i)
 func borrow(amountToBorrow: Int) = { 
@@ -204,8 +206,6 @@ func withdraw() = {
 
   let amountToWithdraw = paymentAmountValidate(i, aTokenId)
 
-  let n = Invoke(i.caller, "", [i.caller], [])
-  
   if liquidityCheck(amountToWithdraw) then
 
   ([

@@ -1,5 +1,5 @@
-import { base64Encode, base58Decode, MAIN_NET_CHAIN_ID } from '@waves/ts-lib-crypto'
-import { IInvokeScriptTransaction, invokeScript, IInvokeScriptParams, WithId } from '@waves/waves-transactions'
+import { base58Decode, base64Encode, MAIN_NET_CHAIN_ID } from '@waves/ts-lib-crypto'
+import { IInvokeScriptTransaction, WithId, invokeScript, IInvokeScriptParams } from '@waves/waves-transactions'
 
 export type ByteVector = Uint8Array | Array<number> | Buffer
 export type DataTypes = 'binary' | 'integer' | 'boolean' | 'string'
@@ -41,73 +41,55 @@ const mapArg = (value: String | Boolean | Number | ByteVector): TInvokeScriptCal
   value: (typeof value) === 'object' ? 'base64:' + base64Encode(Uint8Array.from(<any>value)) : <any>value,
 })
 
-type Args<T> = T extends (...args: infer U) => infer R ? U : never
-type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>
-type Optional<T, K extends keyof T> = Omit<T, K> & Partial<T>
-type Return<T, R> = (...a: Args<T>) => R
-type TContract<TDapp, TBuilder> = Omit<{ [TFunc in keyof TDapp]: Return<TDapp[TFunc], TBuilder> }, 'id'> & {
-  id: string
-}
+type InvokeScriptTx = IInvokeScriptTransaction & WithId
 
-type TInvokeScriptTx = IInvokeScriptTransaction & WithId
+type InvokeParams = Partial<Omit<IInvokeScriptParams, 'call'>> & { seed?: string }
 
+type Index = { [k: string]: any }
 
-
-type WithSeed = {
-  seed: string
-}
-
-type TDefaultContractParams = {
-  dApp?: string
-  seed?: string
-} | undefined
-
-type TInvokeScriptParams<TDefaultParams> =
-  TDefaultParams extends undefined
-  ? Omit<IInvokeScriptParams, 'call'> & WithSeed
-  : TDefaultParams extends { dApp: string, seed: string }
-  ? Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'> & { seed?: string }
-  : TDefaultParams extends { dApp: string }
-  ? Optional<Omit<IInvokeScriptParams, 'call'>, 'dApp'> & WithSeed
-  : Omit<IInvokeScriptParams, 'call'> & { seed?: string }
-
-type TInvoke<TDefaultParams> =
-  TDefaultParams extends { dApp: string, seed: string }
-  ? { invoke: (params?: TInvokeScriptParams<TDefaultParams>) => TInvokeScriptTx }
-  : { invoke: (params: TInvokeScriptParams<TDefaultParams>) => TInvokeScriptTx }
+type InvokeScriptParams<TInvokeDefaultParams> =
+  (
+    TInvokeDefaultParams extends { dApp: string }
+    ? TInvokeDefaultParams extends { seed: string }
+    ? {}
+    : { seed: string } //dApp only
+    : TInvokeDefaultParams extends { seed: string }
+    ? { dApp: string } //seed only
+    : { dApp: string, seed: string } //empty or undefined
+  ) & InvokeParams
 
 
-export const contract = <TDefinition>() => <T extends TDefaultContractParams = undefined>(contractParams: T = undefined): TContract<TDefinition, TInvoke<T>> =>
-  new Proxy({}, {
-    get: (_: any, name: string) =>
-      (...args: any[]): TInvoke<T> =>
-        ({
-          invoke: (params?: TInvokeScriptParams<T>) => {
+type ContractMethod<K extends keyof TContractDefinition, TContractDefinition extends Index, TInvokeDefaultParams, TOut> =
+  TInvokeDefaultParams extends undefined
+  ? (args: Parameters<TContractDefinition[K]>, params: InvokeScriptParams<TInvokeDefaultParams>) => TOut
+  : TInvokeDefaultParams extends { dApp: string, seed: string }
+  ? (args: Parameters<TContractDefinition[K]>, params?: InvokeScriptParams<TInvokeDefaultParams>) => TOut
+  : (args: Parameters<TContractDefinition[K]>, params: InvokeScriptParams<TInvokeDefaultParams>) => TOut
 
-            const dApp = params?.dApp ?? contractParams.dApp
-            const seed = params?.seed ?? contractParams.seed
+type Contract<TContractDefinition, TInvokeDefaultParams, TOut> = { [K in keyof TContractDefinition]: ContractMethod<K, TContractDefinition, TInvokeDefaultParams, TOut> }
 
-            return invokeScript({
-              chainId: base58Decode(((params || { dApp: undefined }).dApp || dApp) || base64Encode([0, MAIN_NET_CHAIN_ID]))[1],
-              dApp,
-              call: {
-                function: name,
-                args: args.map(mapArg),
-              },
-              ...params,
-            }, seed)
-          },
-        }) as any,
-  }) as TContract<TDefinition, TInvoke<T>>
+export const contract = <TContractDefinition extends Index>() =>
+  <TInvokeDefaultParams extends InvokeParams, TOut = InvokeScriptTx>(invokeDefaultParams?: TInvokeDefaultParams, txMap?: (tx: InvokeScriptTx) => TOut): Contract<TContractDefinition, TInvokeDefaultParams, TOut> =>
+    new Proxy({}, {
+      get: (_: any, name: string) =>
+        (args: any[], params?: InvokeParams): TOut => {
+          const map = txMap ?? (x => x as unknown as TOut)
+          
+          const p = { ...invokeDefaultParams, ...params } as InvokeParams
+          const dApp = p.dApp!
+          const seed = p.seed!
+          p.chainId = base58Decode(((params || { dApp: undefined }).dApp || dApp) || base64Encode([0, MAIN_NET_CHAIN_ID]))[1]
+          
+          const tx = invokeScript({
+            ...p,
+            dApp,
+            call: {
+              function: name,
+              args: args.map(mapArg),
+            },
+          }, seed)
 
-
-
-
-
-
-
-
-
-
-
+          return map(tx)
+        },
+    }) as Contract<TContractDefinition, TInvokeDefaultParams, TOut>
 
