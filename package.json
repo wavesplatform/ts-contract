@@ -1,6 +1,6 @@
 {
   "name": "@waves/ts-contract",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Create strongly typed invokes for your ride contracts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,10 +21,10 @@
   "license": "MIT",
   "dependencies": {
     "@waves/ts-lib-crypto": "1.4.3",
-    "@waves/waves-rest": "0.0.77",
-    "@waves/waves-transactions": "^4.1.8"
+    "@waves/waves-rest": "0.0.81",
+    "@waves/waves-transactions": "^4.2.4"
   },
   "devDependencies": {
-    "@types/node": "14.14.30"
+    "@types/node": "17.0.14"
   }
 }

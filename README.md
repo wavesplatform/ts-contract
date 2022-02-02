@@ -47,7 +47,7 @@ To auto generate definitions run the following command in project folder termina
 ```
 npx @waves/ts-contract 3MwGdE779Vhf4bkn8UbqQqEQwos38KtWhsn ./myContract.ts
 ```
-Where **3MwGdE779Vhf4bkn8UbqQqEQwos38KtWhsn** is deployed dApp addrÏess.
+Where **3MwGdE779Vhf4bkn8UbqQqEQwos38KtWhsn** is deployed dApp address.
 
 Or if you want to generate code from **.ride file** call:
 ```
