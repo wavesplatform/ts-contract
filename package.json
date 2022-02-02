@@ -1,13 +1,13 @@
 {
   "name": "@waves/ts-contract",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Create strongly typed invokes for your ride contracts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "rm -fr dist && tsc && cp README.md ./dist && cp package.json ./dist",
     "deploy": "npm run build && cd ./dist && npm version patch && cp package.json ../ && npm publish",
-    "test": "ts-node src/bin.ts example2.ride example2.ts"
+    "test": "ts-node src/bin.ts example-contract2.ride example-contract2.ts"
   },
   "repository": {
     "type": "git",

@@ -1,14 +1,13 @@
-import { ICallable } from './get-callables'
+import { IContractFunction } from './getMembers'
 
 const typeUnion = 'String | Number | Boolean | ByteVector'
 
-
-
 const mapTypeToJs = (type: string) => ({
   'Int': 'Number',
+  'Any': 'any',
 })[type] ?? type
 
-export const createContractDefinition = (name: string, callables: ICallable[], dAppAddress?: string) => {
+export const createContractDefinition = (name: string, callables: IContractFunction[], dAppAddress?: string) => {
 
   const interfaceName = `${name}ContractDefinition`
 
